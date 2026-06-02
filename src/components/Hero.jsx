@@ -1,49 +1,64 @@
-// src/components/Hero.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from "react";
+import heroVideo from "../assets/hero.mp4";
 
 const Hero = () => {
-  const [currentFrame, setCurrentFrame] = useState(1);
-  const containerRef = useRef(null);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [hasScrolled, setHasScrolled] = useState(false);
+  const videoRef = useRef(null);
+  const [loaded, setLoaded] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
+  const [videoError, setVideoError] = useState(false);
   const rafRef = useRef(null);
-  const lastScrollRef = useRef(0);
 
-  const frameCount = 300;
-  const framesPath = '/interior';
-
-  const getFramePath = () => {
-    const frameNum = String(currentFrame).padStart(3, '0');
-    return `${framesPath}/ezgif-frame-${frameNum}.jpg`;
-  };
-
-  /* ── Scroll handler ── */
   useEffect(() => {
-    const handleScroll = () => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const percent = Math.max(0, Math.min(1, -rect.top / (rect.height - window.innerHeight)));
-
-      const framePercent = Math.min(1, percent * 2.5);
-      const easedPercent = Math.pow(framePercent, 0.4);
-      const frame = Math.floor(easedPercent * (frameCount - 1)) + 1;
-
-      setScrollProgress(percent);
-      setCurrentFrame(Math.min(frame, frameCount));
-      setHasScrolled(percent > 0.02);
-      lastScrollRef.current = percent;
+    const v = videoRef.current;
+    if (!v) return;
+    
+    const handleCanPlay = () => {
+      console.log("Video can play");
+      setLoaded(true);
+      v.play().catch(err => console.log("Play error:", err));
     };
+    
+    const handleError = (e) => {
+      console.error("Video error:", e);
+      setVideoError(true);
+      setLoaded(true);
+    };
+    
+    v.muted = true;
+    v.playsInline = true;
+    v.loop = true;
+    v.volume = 0;
+    
+    v.addEventListener("canplay", handleCanPlay);
+    v.addEventListener("loadeddata", handleCanPlay);
+    v.addEventListener("error", handleError);
+    
+    if (v.readyState >= 2) {
+      handleCanPlay();
+    }
+    
+    const playAttempt = setTimeout(() => {
+      if (!loaded) {
+        v.play().then(() => {
+          setLoaded(true);
+        }).catch(err => {
+          console.log("Autoplay prevented:", err);
+          setLoaded(true);
+        });
+      }
+    }, 100);
+    
+    return () => {
+      v.removeEventListener("canplay", handleCanPlay);
+      v.removeEventListener("loadeddata", handleCanPlay);
+      v.removeEventListener("error", handleError);
+      clearTimeout(playAttempt);
+    };
+  }, []);
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [frameCount]);
-
-  /* ── Mouse parallax ── */
   useEffect(() => {
     const onMove = (e) => {
-      rafRef.current && cancelAnimationFrame(rafRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         setMousePos({
           x: e.clientX / window.innerWidth,
@@ -51,326 +66,306 @@ const Hero = () => {
         });
       });
     };
-    window.addEventListener('mousemove', onMove);
-    return () => { window.removeEventListener('mousemove', onMove); rafRef.current && cancelAnimationFrame(rafRef.current); };
+    window.addEventListener("mousemove", onMove);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, []);
 
-  const mx = (mousePos.x - 0.5) * 18; // -9 to +9 px
-  const my = (mousePos.y - 0.5) * 12;
-
-  const imgScale = 1 + scrollProgress * 0.08;
-  const contentOpacity = hasScrolled ? 0 : 1;
-  const contentY = hasScrolled ? 50 : 0;
+  const mx = (mousePos.x - 0.5) * 24;
+  const my = (mousePos.y - 0.5) * 16;
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Jost:wght@200;300;400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Jost:wght@200;300;400;500&display=swap');
 
-        * { scrollbar-width: none; -ms-overflow-style: none; }
-        *::-webkit-scrollbar { display: none; }
-        body { overflow-x: hidden; margin: 0; padding: 0; }
+        .hero-root, .hero-root * { box-sizing: border-box; }
+        .hero-root { font-family: 'Jost', sans-serif; }
 
-        @keyframes float3d {
-          0%,100% { transform: translateY(0px) translateZ(0); }
-          50%      { transform: translateY(-14px) translateZ(6px); }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(28px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes glowPulse {
-          0%,100% { opacity:.4; transform:scale(1); }
-          50%      { opacity:.7; transform:scale(1.08); }
+        @keyframes shimmer {
+          0%, 100% { opacity: .55; }
+          50%      { opacity: 1; }
+        }
+        @keyframes lineGrow {
+          from { transform: scaleX(0); }
+          to   { transform: scaleX(1); }
+        }
+        @keyframes loaderFade {
+          to { opacity: 0; visibility: hidden; }
         }
         @keyframes scrollDot {
-          0%   { transform:translateY(0); opacity:1; }
-          100% { transform:translateY(22px); opacity:0; }
+          0%   { transform: translateY(0); opacity: 1; }
+          100% { transform: translateY(22px); opacity: 0; }
         }
-        @keyframes scanLine {
-          0%   { transform:translateY(-100%); }
-          100% { transform:translateY(100vh); }
-        }
-        @keyframes textReveal {
-          from { opacity:0; transform:translateY(40px) skewY(2deg); }
-          to   { opacity:1; transform:translateY(0) skewY(0deg); }
-        }
-        @keyframes badgeIn {
-          from { opacity:0; transform:translateX(-30px); }
-          to   { opacity:1; transform:translateX(0); }
-        }
-        @keyframes cardIn {
-          from { opacity:0; transform:translateY(40px) scale(.95); }
-          to   { opacity:1; transform:translateY(0) scale(1); }
-        }
-        @keyframes particleDrift {
-          0%   { transform:translate(0,0) scale(1);   opacity:0; }
-          20%  { opacity:1; }
-          80%  { opacity:.5; }
-          100% { transform:translate(var(--dx),var(--dy)) scale(0); opacity:0; }
-        }
-        @keyframes cornerExpand {
-          from { width:0; height:0; }
-          to   { width:50px; height:50px; }
+        @keyframes grain {
+          0%   { transform: translate(0,0); }
+          25%  { transform: translate(-2%,1%); }
+          50%  { transform: translate(1%,-2%); }
+          75%  { transform: translate(-1%,2%); }
+          100% { transform: translate(0,0); }
         }
 
-        .hero-card {
-          background: rgba(255,255,255,.09);
-          border: 1px solid rgba(255,255,255,.2);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          border-radius: 18px;
-          padding: 18px 22px;
-          cursor: pointer;
-          min-width: 160px;
-          text-align: center;
-          transition: all .4s cubic-bezier(.2,.8,.4,1);
-          animation: cardIn .8s cubic-bezier(.16,1,.3,1) both;
-          position: relative;
-          overflow: hidden;
+        .hero-video {
+          position: absolute; inset: 0;
+          width: 100%; height: 100%;
+          object-fit: cover;
+          object-position: center;
+          transition: transform .5s cubic-bezier(.2,.8,.4,1), opacity 1.2s ease;
+          will-change: transform, filter;
+          filter: contrast(1.12) saturate(1.2) brightness(1.05);
+          image-rendering: -webkit-optimize-contrast;
+          image-rendering: crisp-edges;
+          backface-visibility: hidden;
+          transform-style: preserve-3d;
+          -webkit-transform: translateZ(0);
         }
-        .hero-card.active {
-          background: rgba(255,255,255,.92);
-          border-color: #c47a42;
-          box-shadow: 0 20px 50px -10px rgba(196,122,66,.5);
+        @media (min-resolution: 2dppx) {
+          .hero-video { filter: contrast(1.14) saturate(1.22) brightness(1.06) unsharp-mask(.5); }
         }
-        .hero-card::before {
-          content:'';
-          position:absolute;
-          inset:0;
-          background:linear-gradient(135deg,rgba(196,122,66,.15),transparent);
-          opacity:0;
-          transition:opacity .4s;
+
+        .gold-text {
+          background: linear-gradient(135deg, #d6a256 0%, #f4d99a 45%, #c8862d 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          color: transparent;
         }
-        .hero-card:hover::before { opacity:1; }
-        .hero-card:hover { transform: translateY(-10px) scale(1.04) !important; }
 
         .cta-btn {
-          background: linear-gradient(135deg,#c47a42,#a85e2a);
-          border: none;
-          padding: 1rem 2.8rem;
-          border-radius: 60px;
-          color: white;
-          font-family: 'Jost',sans-serif;
-          font-size: 1rem;
-          font-weight: 500;
+          background: transparent;
+          border: 1px solid rgba(214,162,86,.6);
+          padding: 1rem 2.6rem;
+          color: #f4d99a;
+          font-family: 'Jost', sans-serif;
+          font-size: .78rem;
+          font-weight: 400;
           cursor: pointer;
-          letter-spacing: 1.5px;
-          box-shadow: 0 10px 40px rgba(196,122,66,.45);
-          transition: all .35s ease;
+          letter-spacing: 4px;
+          text-transform: uppercase;
+          transition: all .4s ease;
           position: relative;
           overflow: hidden;
         }
         .cta-btn::before {
-          content:'';
-          position:absolute;
-          inset:0;
-          background:linear-gradient(135deg,rgba(255,255,255,.15),transparent);
-          transform:translateX(-100%);
-          transition:transform .4s ease;
+          content: '';
+          position: absolute; inset: 0;
+          background: linear-gradient(135deg, #d6a256, #c8862d);
+          transform: translateY(101%);
+          transition: transform .45s cubic-bezier(.7,.05,.3,1);
+          z-index: -1;
         }
-        .cta-btn:hover::before { transform:translateX(0); }
-        .cta-btn:hover { transform:translateY(-3px); box-shadow:0 18px 50px rgba(196,122,66,.55); }
-        .cta-btn:active { transform:scale(.97); }
+        .cta-btn:hover { color: #0a0606; border-color: #d6a256; }
+        .cta-btn:hover::before { transform: translateY(0); }
+
+        .grain {
+          position: absolute; inset: -50%;
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .35 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/></svg>");
+          opacity: .12;
+          mix-blend-mode: overlay;
+          pointer-events: none;
+          animation: grain 1.4s steps(4) infinite;
+          z-index: 6;
+        }
       `}</style>
 
-      <div ref={containerRef} style={{ height: '800vh', position: 'relative' }}>
-        <div style={{ height: '100vh', position: 'sticky', top: 0, overflow: 'hidden' }}>
+      <section
+        className="hero-root"
+        style={{
+          position: "relative",
+          height: "100vh",
+          width: "100%",
+          overflow: "hidden",
+          background: "#0a0606",
+        }}
+      >
+        <video
+          ref={videoRef}
+          src={heroVideo}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="hero-video"
+          style={{
+            transform: `translate3d(${mx}px, ${my}px, 0) scale(1.04)`,
+            opacity: loaded ? 1 : 0,
+          }}
+        />
 
-          {/* ── Scan-line cinematic overlay ── */}
+        {videoError && (
           <div style={{
-            position: 'absolute', top: 0, left: 0, width: '100%', height: '4px',
-            background: 'linear-gradient(180deg, rgba(255,255,255,.06), transparent)',
-            zIndex: 5, pointerEvents: 'none',
-            animation: 'scanLine 8s linear infinite',
+            position: "absolute", inset: 0,
+            background: "linear-gradient(135deg, #1a1a1a 0%, #0a0606 100%)",
+            zIndex: 1,
           }} />
+        )}
 
-          {/* ── Main background frame (mouse parallax) ── */}
-          <img
-            src={getFramePath()}
-            style={{
-              width: '105%', height: '105vh',
-              objectFit: 'cover',
-              position: 'absolute', top: '-2.5%', left: '-2.5%',
-              zIndex: 0,
-              transform: `scale(${imgScale}) translate(${mx}px, ${my}px)`,
-              transition: 'transform .12s ease-out',
-              willChange: 'transform',
-            }}
-            alt="Royal Interiors"
-          />
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none", zIndex: 2,
+          background: "linear-gradient(180deg, rgba(10,6,6,.55) 0%, rgba(10,6,6,.15) 35%, rgba(10,6,6,.35) 65%, rgba(10,6,6,.9) 100%)",
+        }} />
+        
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none", zIndex: 2,
+          background: "radial-gradient(ellipse at 50% 55%, transparent 0%, rgba(0,0,0,.7) 100%)",
+        }} />
 
-          {/* ── Multi-layer gradient ── */}
+        <div className="grain" />
+
+        {[
+          { top: 28, left: 28, borderTop: "1px solid rgba(214,162,86,.55)", borderLeft: "1px solid rgba(214,162,86,.55)" },
+          { top: 28, right: 28, borderTop: "1px solid rgba(214,162,86,.55)", borderRight: "1px solid rgba(214,162,86,.55)" },
+          { bottom: 28, left: 28, borderBottom: "1px solid rgba(214,162,86,.55)", borderLeft: "1px solid rgba(214,162,86,.55)" },
+          { bottom: 28, right: 28, borderBottom: "1px solid rgba(214,162,86,.55)", borderRight: "1px solid rgba(214,162,86,.55)" },
+        ].map((s, i) => (
+          <div key={i} style={{ position: "absolute", width: 56, height: 56, zIndex: 10, pointerEvents: "none", ...s }} />
+        ))}
+
+        {!loaded && (
           <div style={{
-            position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
-            background: `
-              linear-gradient(180deg, rgba(10,8,5,.55) 0%, transparent 35%),
-              linear-gradient(0deg,   rgba(10,8,5,.7)  0%, transparent 40%),
-              linear-gradient(90deg,  rgba(10,8,5,.45) 0%, transparent 55%)
-            `,
-          }} />
-
-          {/* ── Vignette ── */}
-          <div style={{
-            position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none',
-            background: 'radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.55) 100%)',
-          }} />
-
-          {/* ── Gold progress bar ── */}
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, height: '2px',
-            width: `${scrollProgress * 100}%`,
-            background: 'linear-gradient(90deg, #7a3e10, #c47a42, #e8b06a, #c47a42)',
-            backgroundSize: '200% 100%',
-            zIndex: 10, transition: 'width .05s linear',
-            boxShadow: '0 0 12px rgba(196,122,66,.7)',
-          }} />
-
-          {/* ── Floating dust particles ── */}
-          {Array.from({ length: 16 }).map((_, i) => {
-            const size = Math.random() * 3 + 1.5;
-            const dur = 6 + Math.random() * 10;
-            const del = Math.random() * 8;
-            const dx = (Math.random() - .5) * 120;
-            const dy = -(50 + Math.random() * 100);
-            return (
-              <div key={i} style={{
-                position: 'absolute',
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                width: size, height: size,
-                borderRadius: '50%',
-                background: `rgba(196,122,66,${.3 + Math.random() * .5})`,
-                zIndex: 2, pointerEvents: 'none',
-                '--dx': `${dx}px`, '--dy': `${dy}px`,
-                animation: `particleDrift ${dur}s ease-in-out ${del}s infinite`,
-                boxShadow: `0 0 ${size * 2}px rgba(196,122,66,.4)`,
-              }} />
-            );
-          })}
-
-          {/* ── Corner ornaments ── */}
-          {[
-            { top: 24, left: 24, borderTop: '1.5px solid rgba(196,122,66,.7)', borderLeft: '1.5px solid rgba(196,122,66,.7)' },
-            { top: 24, right: 24, borderTop: '1.5px solid rgba(196,122,66,.7)', borderRight: '1.5px solid rgba(196,122,66,.7)' },
-            { bottom: 24, left: 24, borderBottom: '1.5px solid rgba(196,122,66,.7)', borderLeft: '1.5px solid rgba(196,122,66,.7)' },
-            { bottom: 24, right: 24, borderBottom: '1.5px solid rgba(196,122,66,.7)', borderRight: '1.5px solid rgba(196,122,66,.7)' },
-          ].map((s, i) => (
-            <div key={i} style={{
-              position: 'absolute', ...s, zIndex: 4, pointerEvents: 'none',
-              animation: `cornerExpand .8s cubic-bezier(.16,1,.3,1) ${.5 + i * .1}s both`,
-            }} />
-          ))}
-
-          {/* ── Main text content ── */}
-          <div style={{
-            position: 'absolute', bottom: '18%', left: 0, right: 0,
-            zIndex: 6, padding: '0 7%',
-            opacity: contentOpacity, transform: `translateY(${contentY}px)`,
-            transition: 'opacity .5s ease, transform .5s ease',
-            pointerEvents: hasScrolled ? 'none' : 'auto',
+            position: "absolute", inset: 0, zIndex: 30,
+            background: "#0a0606",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
           }}>
-            <div style={{ maxWidth: 680 }}>
-
-              {/* Badge */}
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 10,
-                background: 'rgba(196,122,66,.12)',
-                border: '1px solid rgba(196,122,66,.35)',
-                backdropFilter: 'blur(8px)', borderRadius: 60,
-                padding: '6px 18px', marginBottom: '1.8rem',
-                animation: 'badgeIn .8s cubic-bezier(.16,1,.3,1) .3s both',
-              }}>
-                <span style={{ color: '#c47a42', fontSize: 10 }}>◆</span>
-                <span style={{ fontFamily: "'Jost',sans-serif", fontSize: '.68rem', letterSpacing: '3px', color: 'rgba(255,255,255,.85)', fontWeight: 300 }}>
-                  EST. 2002 · PREMIUM INTERIORS
-                </span>
-                <span style={{ color: '#c47a42', fontSize: 10 }}>◆</span>
-              </div>
-
-              {/* Headline */}
-              <div style={{ overflow: 'hidden', marginBottom: '0.4rem' }}>
-                <h1 style={{
-                  fontFamily: "'Cormorant Garamond', serif",
-                  fontSize: 'clamp(3rem, 6vw, 5.5rem)',
-                  fontWeight: 700, color: '#f5ebd8',
-                  lineHeight: 1.05, margin: 0,
-                  textShadow: '0 4px 30px rgba(0,0,0,.35)',
-                  letterSpacing: '-0.01em',
-                  animation: 'textReveal .9s cubic-bezier(.16,1,.3,1) .5s both',
-                }}>
-                  Royal{' '}
-                  <em style={{
-                    fontStyle: 'italic', fontWeight: 400,
-                    background: 'linear-gradient(135deg, #e8b06a, #c47a42)',
-                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}>Interiors</em>
-                </h1>
-              </div>
-
-              {/* Sub line */}
-              <div style={{ overflow: 'hidden', marginBottom: '2.2rem' }}>
-                <p style={{
-                  fontFamily: "'Jost', sans-serif",
-                  fontSize: 'clamp(1rem, 1.8vw, 1.25rem)',
-                  color: 'rgba(255,255,255,.7)',
-                  margin: 0, fontWeight: 300, letterSpacing: '.5px',
-                  animation: 'textReveal .9s cubic-bezier(.16,1,.3,1) .7s both',
-                }}>
-                  Shaping workspaces with integrity &amp; timeless style
-                </p>
-              </div>
-
-              {/* CTA */}
-              <div style={{ animation: 'textReveal .9s cubic-bezier(.16,1,.3,1) .9s both' }}>
-                <button className="cta-btn">
-                  Explore Portfolio &nbsp;→
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Style selector cards ── */}
-          <div style={{
-            position: 'absolute', bottom: '4%',
-            left: '50%', transform: 'translateX(-50%)',
-            display: 'flex', gap: '1.2rem', zIndex: 6,
-            flexWrap: 'wrap', justifyContent: 'center',
-            opacity: contentOpacity,
-            transition: 'opacity .5s ease',
-            pointerEvents: hasScrolled ? 'none' : 'auto',
-          }}>
-           
-          </div>
-
-          {/* ── Scroll indicator ── */}
-          <div style={{
-            position: 'absolute', bottom: '5%', right: '5%', zIndex: 6,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-            opacity: hasScrolled ? 0 : 1, transition: 'opacity .4s ease',
-          }}>
-            <div style={{
-              width: 1, height: 60,
-              background: 'linear-gradient(180deg, transparent, rgba(196,122,66,.8))',
-            }} />
-            <div style={{
-              width: 30, height: 50,
-              border: '1px solid rgba(196,122,66,.5)',
-              borderRadius: 30, position: 'relative', overflow: 'hidden',
+            <h2 className="gold-text" style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontWeight: 400,
+              fontSize: "clamp(1.8rem, 4vw, 3rem)",
+              letterSpacing: "12px",
+              margin: 0,
             }}>
-              <div style={{
-                width: 3, height: 8, borderRadius: 2,
-                background: '#c47a42', margin: '8px auto 0',
-                animation: 'scrollDot 1.6s ease-in-out infinite',
-              }} />
-            </div>
+              ROYAL INTERIORS
+            </h2>
+            <div style={{
+              width: 180, height: 1, marginTop: 18,
+              background: "linear-gradient(90deg, transparent, #d6a256, transparent)",
+              transformOrigin: "left center",
+              animation: "lineGrow 1.4s ease-out forwards",
+            }} />
             <p style={{
-              fontFamily: "'Jost',sans-serif",
-              fontSize: '.6rem', color: 'rgba(196,122,66,.6)',
-              letterSpacing: '3px', textTransform: 'uppercase',
-              writingMode: 'vertical-rl', margin: 0,
-            }}>Scroll</p>
+              marginTop: 16, color: "rgba(244,217,154,.7)",
+              fontSize: ".65rem", letterSpacing: "5px",
+              animation: "shimmer 1.8s ease-in-out infinite",
+            }}>
+              PREPARING YOUR EXPERIENCE
+            </p>
           </div>
+        )}
 
+        <header style={{
+          position: "absolute", top: 0, left: 0, right: 0, zIndex: 12,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "1.8rem 3rem",
+          opacity: loaded ? 1 : 0,
+          transition: "opacity 1s 1.3s ease",
+        }}>
+          <span className="gold-text" style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            letterSpacing: "6px", fontSize: ".95rem",
+          }}>
+            R · I
+          </span>
+          <nav style={{ display: "flex", gap: 36 }}>
+            {["Collection", "Atelier", "Journal", "Contact"].map((l) => (
+              <a key={l} href="#" style={{
+                color: "rgba(255,255,255,.75)", textDecoration: "none",
+                fontSize: ".7rem", letterSpacing: "3px", textTransform: "uppercase",
+              }}>{l}</a>
+            ))}
+          </nav>
+        </header>
+
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 8,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          textAlign: "center", padding: "0 1.5rem",
+        }}>
+          <span style={{
+            color: "#d6a256",
+            fontSize: ".7rem", letterSpacing: "8px",
+            textTransform: "uppercase", marginBottom: "2rem",
+            opacity: loaded ? 1 : 0,
+            animation: loaded ? "fadeUp 1s 1.4s both" : "none",
+          }}>
+            ◆ &nbsp; Est. 2002 &nbsp; ◆
+          </span>
+
+          <h1 style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontWeight: 300,
+            fontSize: "clamp(2.8rem, 9vw, 8rem)",
+            lineHeight: .95, margin: 0,
+            color: "#fff", letterSpacing: "-1px",
+            opacity: loaded ? 1 : 0,
+            animation: loaded ? "fadeUp 1.2s 1.6s both" : "none",
+          }}>
+            Timeless <em className="gold-text" style={{ fontStyle: "italic", fontWeight: 400 }}>Interiors</em>
+          </h1>
+
+          <div style={{
+            width: 80, height: 1, margin: "2rem 0",
+            background: "linear-gradient(90deg, transparent, #d6a256, transparent)",
+            opacity: loaded ? 1 : 0,
+            transition: "opacity 1s 2s ease",
+          }} />
+
+          <p style={{
+            fontFamily: "'Jost', sans-serif", fontWeight: 300,
+            fontSize: "clamp(.85rem, 1.2vw, 1rem)",
+            color: "rgba(255,255,255,.78)",
+            maxWidth: 540, letterSpacing: "2px",
+            lineHeight: 1.8,
+            opacity: loaded ? 1 : 0,
+            animation: loaded ? "fadeUp 1s 2.1s both" : "none",
+          }}>
+            Crafted spaces that honour quiet luxury, heritage craftsmanship,
+            and the rituals of refined living.
+          </p>
+
+          <button className="cta-btn" style={{
+            marginTop: "2.5rem",
+            opacity: loaded ? 1 : 0,
+            animation: loaded ? "fadeUp 1s 2.4s both" : "none",
+          }}>
+            Discover the Collection
+          </button>
         </div>
-      </div>
+
+        <div style={{
+          position: "absolute", bottom: 32, left: "50%",
+          transform: "translateX(-50%)", zIndex: 9,
+          display: "flex", flexDirection: "column",
+          alignItems: "center", gap: 10,
+          opacity: loaded ? 1 : 0,
+          transition: "opacity 1s 2.6s ease",
+        }}>
+          <span style={{
+            fontSize: ".6rem", letterSpacing: "5px",
+            color: "rgba(244,217,154,.7)", textTransform: "uppercase",
+          }}>Scroll</span>
+          <div style={{
+            width: 22, height: 36,
+            border: "1px solid rgba(244,217,154,.5)",
+            borderRadius: 12,
+            display: "flex", justifyContent: "center", paddingTop: 6,
+          }}>
+            <div style={{
+              width: 2, height: 8, borderRadius: 2,
+              background: "#d6a256",
+              animation: "scrollDot 1.6s ease-in-out infinite",
+            }} />
+          </div>
+        </div>
+      </section>
     </>
   );
 };
